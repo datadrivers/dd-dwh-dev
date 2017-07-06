@@ -2,7 +2,7 @@
 
 #  This script pulls a previously exported mariadb docker volume (*.tar.gz) 
 #+ from an aws s3 bucket, unpacks it to a given location and reinstantiates the
-#+ database environment with a given docker-compose.yml file
+#+ database environment with a the given command line arguments.
 
 # Maintainer: ddluke
 # Last update date: 2017-07-05
@@ -20,132 +20,197 @@
 
 
 # Number of expected arguments
-EXPECTED_ARGS=9
+EXPECTED_ARGS=12
 
-# Used variables
+# Expected arguments, as displayed within usage
 s3Bucket=
 s3Path=
 s3Object=
 LocalPath=
-dockerComposeYml=
-DB_MYSQL_ROOT_PASSWORD=
-DB_MYSQL_DATA_DIR=
-DB_MYSQL_CONFD_DIR=
-DB_MYSQL_MY_CNF_FILE=
+mariadb_container_name=
+mariadb_container_data_volume=
+mariadb_container_confd_volume=
+mariadb_container_confd_file=
+mariadb_release=
+mariadb_root_password=
+mariadb_cpu_shares=
+mariadb_memory_limit=
+
 
 
 function usage {
-# Function to display usage and exit with error
+# Function to display usage
     echo
-    echo "Usage: $0 "
-    echo "      [--s3Bucket=some-name]"
-    echo "      [--s3Path=/some/path/to/s3object]"
-    echo "      [--s3Object=s3object]"
-    echo "      [--LocalPath=/some/path]"
-    echo "      [--dockerComposeYml=/path/to/file]"
-    echo "      [--DB_MYSQL_ROOT_PASSWORD=mysecret]"
-    echo "      [--DB_MYSQL_DATA_DIR]=/some/path]"
-    echo "      [--DB_MYSQL_CONFD_DIR]=/some/path]"
-    echo "      [--DB_MYSQL_MY_CNF_FILE]=/path/to/my.cnf]"
+    echo "Usage ${0##*/}:"
+    echo "      [--s3Bucket] [--s3Path] [--s3Object] [--LocalPath]"
+    echo "      [--mariadb_container_data_volume] [--mariadb_container_confd_volume]"
+    echo "      [--mariadb_container_confd_file] [--mariadb_release] [--mariadb_root_password]"
+    echo "      [--mariadb_cpu_shares] [--mariadb_memory_limit]"
     echo
-    echo "      --s3Bucket                  AWS S3 bucket name"
-    echo "      --s3Path                    Path to an AWS-S3 *.tar.gz object that holds the volume backup"
-    echo "      --s3Object                  Name of the AWS-S3 *.tar.gz object that holds the volume backup"
-    echo "      --LocalPath                 Path the s3Object will be stored in"
-    echo "      --dockerComposeYml          Path to your docker-compose.yml file. It should contain"
-    echo "                                  the variables DB_MYSQL_ROOT_PASSWORD, DB_MYSQL_DATA_DIR, DB_MYSQL_CONFD_DIR"
-    echo "                                  which will be replace with the values passed to the script"
-    echo "      --DB_MYSQL_ROOT_PASSWORD    MYSQL_ROOT_PASSWORD associated to the mariadb root user."
-    echo "                                  Wrap your password in single quotes if it contains special characaters."
-    echo "                                  The '&'-sign needs to be manually escaped using backslash"
-    echo "      --DB_MYSQL_DATA_DIR         Path to your hosts mariadb data dir, container data is persisted to"
-    echo "      --DB_MYSQL_CONFD_DIR        Path to a directory that holds a custom my.conf file"
-    echo "                                  which will be mounted into the containers data dir at "
-    echo "                                  /etc/mysql/conf.d"
-    echo "      --DB_MYSQL_MY_CNF_FILE      Valid Path/to/my.cnf which will be mounted into DB_MYSQL_CONFD_DIR"
+    echo "--s3Bucket                        Name of the AWS S3 Bucket, the aws-cli will pull the MariaDB volume backup from."
+    echo "--s3Path                          Path to the MariaDB volume backup"
+    echo "--s3Object                        Name of the MariaDB volume backup"
+    echo "--LocalPath                       Host path, where the MariaDB volume backup will be temporarily stored"    
+    echo "--mariadb_container_name          This is the name your MariaDB container will be listed with using docker ps"
+    echo "--mariadb_container_data_volume   If you specify /my/own/datadir as argument, the directory will be created"
+    echo "                                  (if not already existing) and mounted from the underlying host system as"
+    echo "                                  /var/lib/mysql inside the container, where MySQL by default will write its data files"
+    echo "--mariadb_container_confd_volume  If /my/custom/config-file.cnf is the path and name of your custom configuration file,"
+    echo "                                  you would set it to /my/custom. This will make the created MariaDB instance"
+    echo "                                  use the combined startup settings from /etc/mysql/my.cnf and"
+    echo "                                  /etc/mysql/conf.d/config-file.cnf, with settings from the latter taking precedence"
+    echo "--mariadb_container_confd_file    Specifies the location of a custom my-config-file.cnf. This file will be copied into " 
+    echo "                                  the path specified within ${mariadb_container_confd_volume}"
+    echo "--mariadb_release                 This is the tag of the MariaDB image you wish to pull, for instance 10.3, 10.2, latest ..."
+    echo "--mariadb_root_password           This variable will be associated with the MariaDB environment variable MYSQL_ROOT_PASSWORD."
+    echo "--mariadb_cpu_shares              CPU shares (relative weight)"
+    echo "--mariadb_memory_limit            Memory limit"
     echo
-    exit 1
-
 }
 
 function loggError {
-  echo "ERROR\: $0, Line ${LINENO}\: $1"
+# Function to display a custom error message, call usage and exit with error
+    echo "${0##*/} - ERROR: $1"
+    usage
+    exit 1
 }
 
 function loggDebug {
-  echo "DEBUG\: $0, Line ${LINENO}\: $1"
+# Function to display a custom logg message for traceability
+    echo "${0##*/} - DEBUG: $1"
 }
 
-
-
 if [ $# -ne $EXPECTED_ARGS ]
-# Check for proper number of command-line args.
+# Check if the number of given arguments equals $EXPECTED_ARGS and else run loggError and exit
     then 
-    echo
-    loggError "Invalid number of arguments provided!"
-    usage
-    exit $E_BADARGS
+        loggError "Invalid number of arguments provided!"
 fi
 
 
 while [ $# -gt 0 ]; do
 # Parse command line arguments and exit on unknown argument, displaying usage
     case "$1" in
+        
         --s3Bucket=*) s3Bucket=${1#*=} ;;
         --s3Path=*) s3Path=${1#*=} ;;
         --s3Object=*) s3Object=${1#*=} ;;
         --LocalPath=*) LocalPath=${1#*=} ;;
-        --dockerComposeYml=*) dockerComposeYml=${1#*=} ;;
-        --DB_MYSQL_ROOT_PASSWORD=*) DB_MYSQL_ROOT_PASSWORD=${1#*=} ;;
-        --DB_MYSQL_DATA_DIR=*) DB_MYSQL_DATA_DIR=${1#*=} ;;
-        --DB_MYSQL_CONFD_DIR=*) DB_MYSQL_CONFD_DIR=${1#*=} ;;
-        --DB_MYSQL_MY_CNF_FILE=*) DB_MYSQL_MY_CNF_FILE=${1#*=} ;;
+        --mariadb_container_name=*) mariadb_container_name=${1#*=} ;;
+        --mariadb_container_data_volume=*) mariadb_container_data_volume=${1#*=} ;;
+        --mariadb_container_confd_volume=*) mariadb_container_confd_volume=${1#*=} ;;
+        --mariadb_container_confd_file=*) mariadb_container_confd_file=${1#*=} ;;
+        --mariadb_release=*) mariadb_release=${1#*=} ;;
+        --mariadb_root_password=*) mariadb_root_password=${1#*=} ;;
+        --mariadb_cpu_shares=*) mariadb_cpu_shares=${1#*=} ;;
+        --mariadb_memory_limit=*) mariadb_memory_limit=${1#*=} ;;
         *)
-        echo
         loggError "Unkown Argument ${1/=*/}" 
-        usage
-        exit $E_BADARGS
     esac
     shift
 done
 loggDebug "All parameters successfully parsed"
 
 
-loggDebug "Creating directory ${LocalPath} if not existing and copy ${s3Object} from aws s3 to ${LocalPath}"
-mkdir -p ${LocalPath}
+
+
+# Initialize the directory, where the MariaDB volume backup will be temporarily stored and pull the 
+# object from the specified bucket and path
+loggDebug "Creating directory ${LocalPath}"
+if [ -d ${LocalPath} ]
+    then
+        loggDebug "${LocalPath} successfully created"
+        mkdir ${LocalPath}
+    else
+        loggDebug "Path ${LocalPath} already exists"
+fi
 loggDebug "Copying s3://${s3Bucket}/${s3Path}/${s3Object} to ${LocalPath}"
 aws s3 cp s3://${s3Bucket}/${s3Path}/${s3Object} ${LocalPath}
 
 
-loggDebug "'sed' replace \$DB_MYSQL_ROOT_PASSWORD, \$DB_MYSQL_DATA_DIR and \$DB_MYSQL_CONFD_DIR within ${dockerComposeYml}"
-sed -i s+DB_MYSQL_ROOT_PASSWORD+${DB_MYSQL_ROOT_PASSWORD}+g ${dockerComposeYml}
-sed -i s+DB_MYSQL_DATA_DIR+${DB_MYSQL_DATA_DIR}+g ${dockerComposeYml}
-sed -i s+DB_MYSQL_CONFD_DIR+${DB_MYSQL_CONFD_DIR}+g ${dockerComposeYml}
 
 
-loggDebug "Creating directory ${DB_MYSQL_DATA_DIR}"
-mkdir -p ${DB_MYSQL_DATA_DIR}
-loggDebug "Unpacking ${LocalPath}/${s3Object} to ${DB_MYSQL_DATA_DIR}"
-tar -xf ${LocalPath}/${s3Object} -C ${DB_MYSQL_DATA_DIR}/..
+# Initialize the directory that will be mounted from the underlying host system as /var/lib/mysql 
+# inside the container , where MySQL by default will write its data files
+loggDebug "Creating directory ${mariadb_container_data_volume}"
+if [ -d ${mariadb_container_data_volume} ]
+    then
+        loggDebug "Path ${mariadb_container_data_volume} already exists"
+    else
+        mkdir ${mariadb_container_data_volume}
+        loggDebug "${mariadb_container_data_volume} successfully created"
+fi
+loggDebug "Unpacking ${LocalPath}/${s3Object} to ${DB_MYSQL_DATA_DIR}/.."
+#tar -xf ${LocalPath}/${s3Object} -C ${DB_MYSQL_DATA_DIR}/..
 
 
-loggDebug "Creating directory ${DB_MYSQL_CONFD_DIR}"
-mkdir -p ${DB_MYSQL_CONFD_DIR}
-loggDebug "Copying ${DB_MYSQL_MY_CNF_FILE} to ${DB_MYSQL_CONFD_DIR}"
-cp ${DB_MYSQL_MY_CNF_FILE} ${DB_MYSQL_CONFD_DIR}
 
 
-loggDebug "Starting servies as specified within ${dockerComposeYml}"
-docker-compose -f ${dockerComposeYml} up -d
+# Initialize the directory where your my-config-file.cnf file be stored in. This directory will be
+# mounted into the containers /etc/mysql/conf.d directory. This will make the created MariaDB instance
+# use the combined startup settings from /etc/mysql/my.cnf and /etc/mysql/conf.d/config-file.cnf, 
+# with settings from the latter taking precedence
+loggDebug "Creating directory ${mariadb_container_confd_volume}"
+if [ -d ${mariadb_container_confd_volume} ]
+# Check wether ${mariadb_container_confd_volume} is a directory and create it if not existing
+    then
+        loggDebug "Path ${mariadb_container_confd_volume} already exists"
+    else
+        mkdir -p ${mariadb_container_confd_volume}
+        loggDebug "${mariadb_container_confd_volume} successfully created"
+fi
+
+if [ ! -e ${mariadb_container_confd_file} ]
+# Check wether ${mariadb_container_confd_file} exists and raise error if false
+    then
+        loggError "File ${mariadb_container_confd_file} does not exist or is not a file"
+fi
+
+if [ -s ${mariadb_container_confd_file} ]
+# Check wether ${mariadb_container_confd_file} is not zero size and exit if false, else proceed and
+# copy ${mariadb_container_confd_file} into ${mariadb_container_confd_volume}
+    then
+        loggDebug "Copying ${mariadb_container_confd_file} to ${mariadb_container_confd_volume}"
+        cp ${mariadb_container_confd_file} ${mariadb_container_confd_volume}
+    else
+        loggError "File ${mariadb_container_confd_file} is zero size"
+fi
 
 
-loggDebug "Removing ${dockerComposeYml}"
-rm ${dockerComposeYml}
-loggDebug "Removing ${DB_MYSQL_MY_CNF_FILE}"
-rm ${DB_MYSQL_MY_CNF_FILE}
+
+
+# Pull the MariaDB image as specified within ${mariadb_release}
+docker pull mariadb:${mariadb_release}
+# Start up the container
+docker run \
+    --name=${mariadb_container_name} \
+    -c ${mariadb_cpu_shares}\
+    -m ${mariadb_memory_limit}\
+    -v ${mariadb_container_data_volume}:/var/lib/mysql \
+    -v ${mariadb_container_confd_volume}:/etc/mysql/conf.d \
+    -e MYSQL_ROOT_PASSWORD=${mariadb_root_password}\
+    -d \
+    mariadb:${mariadb_release}
+
+# Wait 5 seconds before checking wether the container is running
+sleep 5
+
+# Check if container is running an else display the containers log output
+docker_container_status=
+docker inspect -f {{.State.Running}} ${mariadb_container_name} > ${docker_container_status}
+if [ ${docker_container_status} == "true" ]
+    then
+        echo "Container  ${mariadb_container_name} is up and running"
+    else
+        echo "Container ${mariadb_container_name} could not be started, displaying log output"
+        docker logs ${mariadb_container_name}
+        exit 1
+fi
+
+
+# Perform cleanup operations
 loggDebug "Removing ${LocalPath}/${s3Object}"
-rm ${LocalPath}/${s3Object}
-#loggDebug "Removing ${LocalPath}"
+# rm ${LocalPath}/${s3Object}
+loggDebug "Removing ${LocalPath}"
 # rm -r ${LocalPath}
 
 exit 0
