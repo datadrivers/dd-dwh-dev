@@ -111,6 +111,24 @@ loggDebug "All parameters successfully parsed"
 
 
 
+#  Control wether ${mariadb_container_name} already exists (either running or created) and exit if true
+docker_container_status=$(docker inspect -f {{.State.Status}} ${mariadb_container_name})
+if [ "${docker_container_status}" == "running" ] || [ "${docker_container_running}" == "created" ]
+    then
+        loggError "container ${mariadb_container_name} already exists. Please make sure to specify unique container names"
+fi
+
+
+
+#  Control wether ${mariadb_container_name} already exists (either running or created) and exit if true
+docker_container_status=$(docker inspect -f {{.State.Status}} ${mariadb_container_name})_name
+if [ "${docker_container_status}" == "running" ] || [ "${docker_container_running}" == "created" ]
+    then
+        loggError "container ${mariadb_container_name}_data already exists. Please make sure to specify unique container names"
+fi
+
+
+
 #  Initialize the directory, where the MariaDB volume backup will be temporarily stored and pull the 
 #+ object from the specified bucket and path
 loggDebug "Creating directory ${LocalPath}"
@@ -164,50 +182,51 @@ if [ -s ${mariadb_container_confd_file} ]
     else
         loggError "File ${mariadb_container_confd_file} is zero size"
 fi
- 
 
 
-
-#  Pull the MariaDB image as specified within ${mariadb_release}
-docker pull mariadb:${mariadb_release}
-docker pull alpine:latest
 
 
 #  Create volume container
-docker create -v /dd_dwh_dev --name dd_dwh_dev_data alpine:latest /bin/true
+docker create -v /${mariadb_container_name} --name ${mariadb_container_name}_data alpine:latest /bin/true
+
+#  Check if ${mariadb_container_name}_data is running and else display the containers log output
+docker_container_status=$(docker inspect -f {{.State.Status}} ${mariadb_container_name}_data)
+if [ "${docker_container_status}" == "created" ]
+    then
+        loggDebug "Container  ${mariadb_container_name}_data has successfully been created"
+    else
+        echo "Container ${mariadb_container_name}_data could not be created, displaying log output:"
+        docker logs ${mariadb_container_name}
+        exit 1
+fi
+
+
+
+
 #  Create MariaDB container
 docker run -d -c ${mariadb_cpu_shares} -m ${mariadb_memory_limit} \
     --name=${mariadb_container_name} \
     --publish ${mariadb_access_port}:3306 \
-    -e MYSQL_ROOT_PASSWORD=${mariadb_root_password} \
-    --volumes-from dd_dwh_dev_data \
+    --volumes-from ${mariadb_container_name}_data \
     --volume ${mariadb_container_confd_volume}:/etc/mysql/conf.d/ \
+    -e MYSQL_ROOT_PASSWORD=${mariadb_root_password} \
     mariadb:${mariadb_release}
-
-
 
 #  Wait 5 seconds before checking wether the container is running
 sleep 5
 
-#  Check if container is running an else display the containers log output
+#  Check if container is running and else display the containers log output
 docker_container_status=$(docker inspect -f {{.State.Running}} ${mariadb_container_name})
 if [ "${docker_container_status}" == "true" ]
     then
-        echo "Container  ${mariadb_container_name} is up and running"
+        loggDebug "Container  ${mariadb_container_name} is up and running"
     else
         echo "Container ${mariadb_container_name} could not be started, displaying log output:"
         docker logs ${mariadb_container_name}
         exit 1
 fi
-exit 0
 
 
-
-
-#  Perform cleanup operations
-loggDebug "Removing ${LocalPath}/${s3Object}"
-#  rm ${LocalPath}/${s3Object}
-loggDebug "Removing ${LocalPath}"
-#  rm -r ${LocalPath}
+loggDebug "Execution Succeeded"
 
 exit 0
