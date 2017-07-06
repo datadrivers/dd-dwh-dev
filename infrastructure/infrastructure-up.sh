@@ -120,7 +120,7 @@ loggDebug "Creating directory ${LocalPath}"
     then
         loggDebug "Path ${LocalPath} already exists"
     else
-        mkdir ${LocalPath}
+        mkdir -p ${LocalPath}
         loggDebug "${LocalPath} successfully created"
 fi
 loggDebug "Copying s3://${s3Bucket}/${s3Path}/${s3Object} to ${LocalPath}"
@@ -136,7 +136,7 @@ if [ -d ${mariadb_container_data_volume} ]
     then
         loggDebug "Path ${mariadb_container_data_volume} already exists"
     else
-        mkdir ${mariadb_container_data_volume}
+        mkdir -p ${mariadb_container_data_volume}
         loggDebug "${mariadb_container_data_volume} successfully created"
 fi
 loggDebug "Unpacking ${LocalPath}/${s3Object} to ${DB_MYSQL_DATA_DIR}/.."
