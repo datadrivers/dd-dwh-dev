@@ -110,7 +110,7 @@ while [ $# -gt 0 ]; do
 done
 loggDebug "All parameters successfully parsed"
 
-
+exit 0
 
 
 # Initialize the directory, where the MariaDB volume backup will be temporarily stored and pull the 
