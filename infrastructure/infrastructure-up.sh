@@ -120,14 +120,15 @@ if [ -d ${LocalPath} ]
     then
         loggDebug "Path ${LocalPath} already exists. Removing old backup file"
         rm ${LocalPath}/${s3Object}
+        loggDebug "File ${LocalPath}/${s3Object} successfully removed"
     else
         mkdir -p ${LocalPath}
         loggDebug "${LocalPath} successfully created"
 fi
-exit 0
 loggDebug "Copying s3://${s3Bucket}/${s3Path}/${s3Object} to ${LocalPath}"
 aws s3 cp s3://${s3Bucket}/${s3Path}/${s3Object} ${LocalPath}
 
+exit 0
 
 
 
