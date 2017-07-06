@@ -110,7 +110,6 @@ while [ $# -gt 0 ]; do
 done
 loggDebug "All parameters successfully parsed"
 
-exit 0
 
 
 # Initialize the directory, where the MariaDB volume backup will be temporarily stored and pull the 
@@ -123,6 +122,7 @@ loggDebug "Creating directory ${LocalPath}"
         mkdir -p ${LocalPath}
         loggDebug "${LocalPath} successfully created"
 fi
+exit 0
 loggDebug "Copying s3://${s3Bucket}/${s3Path}/${s3Object} to ${LocalPath}"
 aws s3 cp s3://${s3Bucket}/${s3Path}/${s3Object} ${LocalPath}
 
