@@ -117,7 +117,7 @@ exit 0
 # object from the specified bucket and path
 loggDebug "Creating directory ${LocalPath}"
 if [ -d ${LocalPath} ]
-    then
+    then
         loggDebug "Path ${LocalPath} already exists"
     else
         mkdir -p ${LocalPath}
