@@ -115,7 +115,8 @@ loggDebug "All parameters successfully parsed"
 # Initialize the directory, where the MariaDB volume backup will be temporarily stored and pull the 
 # object from the specified bucket and path
 loggDebug "Creating directory ${LocalPath}"
-if [ -d ${LocalPath} ]
+
+if [ -d ${LocalPath} ]
     then
         loggDebug "Path ${LocalPath} already exists"
     else
