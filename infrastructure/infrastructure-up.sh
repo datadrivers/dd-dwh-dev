@@ -118,7 +118,8 @@ loggDebug "Creating directory ${LocalPath}"
 
 if [ -d ${LocalPath} ]
     then
-        loggDebug "Path ${LocalPath} already exists"
+        loggDebug "Path ${LocalPath} already exists. Removing old backup file"
+        rm ${LocalPath}/${s3Object}
     else
         mkdir -p ${LocalPath}
         loggDebug "${LocalPath} successfully created"
