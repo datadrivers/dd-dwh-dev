@@ -191,7 +191,7 @@ docker pull alpine:latest
 
 
 # docker create -v /dbdata --name dbstore training/postgres /bin/true
-docker create -v /dd-dwh-dev --name dd-dwh-dev-data alpine:latest /bin/true
+docker create -v /dd_dwh_dev --name dd_dwh_dev_data alpine:latest /bin/true
 
 docker run -d -c ${mariadb_cpu_shares} -m ${mariadb_memory_limit} \
     --name=${mariadb_container_name} \
