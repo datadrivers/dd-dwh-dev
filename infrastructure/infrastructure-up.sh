@@ -144,7 +144,6 @@ fi
 loggDebug "Unpacking ${LocalPath}/${s3Object} to ${DB_MYSQL_DATA_DIR}/.."
 #tar -xf ${LocalPath}/${s3Object} -C ${DB_MYSQL_DATA_DIR}/..
 
-exit 0
 
 
 
@@ -178,6 +177,7 @@ if [ -s ${mariadb_container_confd_file} ]
         loggError "File ${mariadb_container_confd_file} is zero size"
 fi
  
+exit 0
 
 
 
