@@ -197,6 +197,7 @@ docker run -d -c ${mariadb_cpu_shares} -m ${mariadb_memory_limit} \
     --publish ${mariadb_access_port}:3306 \
     -e MYSQL_ROOT_PASSWORD=${mariadb_root_password} \
     --volumes-from dd_dwh_dev_data \
+    -v /dd_dwh_dev:/var/lib/mysql
     mariadb:${mariadb_release}
 
 
