@@ -186,14 +186,22 @@ fi
 
 # Pull the MariaDB image as specified within ${mariadb_release}
 docker pull mariadb:${mariadb_release}
+docker pull alpine:latest
 # Start up the container
+
+
+# docker create -v /dbdata --name dbstore training/postgres /bin/true
+docker create -v /dd-dwh-dev --name dd-dwh-dev-data alpine:latest /bin/true
+
 docker run -d -c ${mariadb_cpu_shares} -m ${mariadb_memory_limit} \
     --name=${mariadb_container_name} \
     --publish ${mariadb_access_port}:3306 \
     -e MYSQL_ROOT_PASSWORD=${mariadb_root_password} \
-    --volume ${mariadb_container_data_volume}:/var/lib/mysql \
-    --volume ${mariadb_container_confd_volume}:/etc/mysql/conf.d \
+    --volumes-from dd-dwh-dev-data \
     mariadb:${mariadb_release}
+
+#    --volume ${mariadb_container_data_volume}:/var/lib/mysql \
+#    --volume ${mariadb_container_confd_volume}:/etc/mysql/conf.d \
 
 # Wait 5 seconds before checking wether the container is running
 sleep 5
