@@ -128,7 +128,6 @@ fi
 loggDebug "Copying s3://${s3Bucket}/${s3Path}/${s3Object} to ${LocalPath}"
 aws s3 cp s3://${s3Bucket}/${s3Path}/${s3Object} ${LocalPath}
 
-exit 0
 
 
 
@@ -145,6 +144,7 @@ fi
 loggDebug "Unpacking ${LocalPath}/${s3Object} to ${DB_MYSQL_DATA_DIR}/.."
 #tar -xf ${LocalPath}/${s3Object} -C ${DB_MYSQL_DATA_DIR}/..
 
+exit 0
 
 
 
