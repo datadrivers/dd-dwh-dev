@@ -195,9 +195,8 @@ docker run \
 sleep 5
 
 # Check if container is running an else display the containers log output
-docker_container_status=
-docker inspect -f {{.State.Running}} ${mariadb_container_name} > ${docker_container_status}
-if [ ${docker_container_status} == "true" ]
+docker_container_status=docker inspect -f {{.State.Running}} ${mariadb_container_name}
+if [ "${docker_container_status}" == "true" ]
     then
         echo "Container  ${mariadb_container_name} is up and running"
     else
@@ -205,6 +204,8 @@ if [ ${docker_container_status} == "true" ]
         docker logs ${mariadb_container_name}
         exit 1
 fi
+
+
 
 
 # Perform cleanup operations
