@@ -195,9 +195,9 @@ docker create -v /dd_dwh_dev --name dd_dwh_dev_data alpine:latest /bin/true
 docker run -d -c ${mariadb_cpu_shares} -m ${mariadb_memory_limit} \
     --name=${mariadb_container_name} \
     --publish ${mariadb_access_port}:3306 \
+    --datadir=/dd_dwh_dev \
     -e MYSQL_ROOT_PASSWORD=${mariadb_root_password} \
     --volumes-from dd_dwh_dev_data \
-    -v /dd_dwh_dev:/var/lib/mysql
     mariadb:${mariadb_release}
 
 
