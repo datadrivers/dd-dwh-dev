@@ -177,7 +177,6 @@ if [ -s ${mariadb_container_confd_file} ]
         loggError "File ${mariadb_container_confd_file} is zero size"
 fi
  
-exit 0
 
 
 
@@ -199,7 +198,6 @@ sleep 5
 
 # Check if container is running an else display the containers log output
 docker_container_status=$(docker inspect -f {{.State.Running}} ${mariadb_container_name})
-echo ${docker_container_status}
 if [ "${docker_container_status}" == "true" ]
     then
         echo "Container  ${mariadb_container_name} is up and running"
@@ -208,6 +206,7 @@ if [ "${docker_container_status}" == "true" ]
         docker logs ${mariadb_container_name}
         exit 1
 fi
+exit 0
 
 
 
