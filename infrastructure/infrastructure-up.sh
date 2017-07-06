@@ -116,12 +116,12 @@ loggDebug "All parameters successfully parsed"
 # Initialize the directory, where the MariaDB volume backup will be temporarily stored and pull the 
 # object from the specified bucket and path
 loggDebug "Creating directory ${LocalPath}"
-if [ -d ${LocalPath} ]
-    then
-        loggDebug "${LocalPath} successfully created"
-        mkdir ${LocalPath}
-    else
+if [ -d ${LocalPath} ]
+    then
         loggDebug "Path ${LocalPath} already exists"
+    else
+        mkdir ${LocalPath}
+        loggDebug "${LocalPath} successfully created"
 fi
 loggDebug "Copying s3://${s3Bucket}/${s3Path}/${s3Object} to ${LocalPath}"
 aws s3 cp s3://${s3Bucket}/${s3Path}/${s3Object} ${LocalPath}
@@ -174,7 +174,7 @@ if [ -s ${mariadb_container_confd_file} ]
     else
         loggError "File ${mariadb_container_confd_file} is zero size"
 fi
-
+ 
 
 
 
