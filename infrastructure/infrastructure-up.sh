@@ -72,6 +72,7 @@ function usage {
 
 function loggError {
 # Function to display a custom error message, call usage and exit with error
+    echo
     echo "${0##*/} - ERROR: $1"
     usage
     exit 1
@@ -188,7 +189,7 @@ docker pull mariadb:${mariadb_release}
 # Start up the container
 docker run -d -c ${mariadb_cpu_shares} -m ${mariadb_memory_limit} \
     --name=${mariadb_container_name} \
-    --publish 4{mariadb_access_port}:3306 \
+    --publish ${mariadb_access_port}:3306 \
     -e MYSQL_ROOT_PASSWORD=${mariadb_root_password} \
     --volume ${mariadb_container_data_volume}:/var/lib/mysql \
     --volume ${mariadb_container_confd_volume}:/etc/mysql/conf.d \
