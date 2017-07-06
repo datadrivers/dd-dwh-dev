@@ -20,7 +20,7 @@
 
 
 # Number of expected arguments
-EXPECTED_ARGS=12
+EXPECTED_ARGS=13
 
 # Expected arguments, as displayed within usage
 s3Bucket=
@@ -35,6 +35,7 @@ mariadb_release=
 mariadb_root_password=
 mariadb_cpu_shares=
 mariadb_memory_limit=
+mariadb_access_port=
 
 
 
@@ -65,6 +66,7 @@ function usage {
     echo "--mariadb_root_password           This variable will be associated with the MariaDB environment variable MYSQL_ROOT_PASSWORD."
     echo "--mariadb_cpu_shares              CPU shares (relative weight)"
     echo "--mariadb_memory_limit            Memory limit"
+    echo "--mariadb_access_port             Defines which host port will point to container port 3306"
     echo
 }
 
@@ -103,6 +105,7 @@ while [ $# -gt 0 ]; do
         --mariadb_root_password=*) mariadb_root_password=${1#*=} ;;
         --mariadb_cpu_shares=*) mariadb_cpu_shares=${1#*=} ;;
         --mariadb_memory_limit=*) mariadb_memory_limit=${1#*=} ;;
+        --mariadb_access_port=*) mariadb_access_port=${1#*=} ;;
         *)
         loggError "Unkown Argument ${1/=*/}" 
     esac
@@ -183,14 +186,12 @@ fi
 # Pull the MariaDB image as specified within ${mariadb_release}
 docker pull mariadb:${mariadb_release}
 # Start up the container
-docker run \
+docker run -d -c ${mariadb_cpu_shares} -m ${mariadb_memory_limit} \
     --name=${mariadb_container_name} \
-    -c ${mariadb_cpu_shares}\
-    -m ${mariadb_memory_limit}\
-    -v ${mariadb_container_data_volume}:/var/lib/mysql \
-    -v ${mariadb_container_confd_volume}:/etc/mysql/conf.d \
-    -e MYSQL_ROOT_PASSWORD=${mariadb_root_password}\
-    -d \
+    --publish 4{mariadb_access_port}:3306 \
+    -e MYSQL_ROOT_PASSWORD=${mariadb_root_password} \
+    --volume ${mariadb_container_data_volume}:/var/lib/mysql \
+    --volume ${mariadb_container_confd_volume}:/etc/mysql/conf.d \
     mariadb:${mariadb_release}
 
 # Wait 5 seconds before checking wether the container is running
@@ -202,7 +203,7 @@ if [ "${docker_container_status}" == "true" ]
     then
         echo "Container  ${mariadb_container_name} is up and running"
     else
-        echo "Container ${mariadb_container_name} could not be started, displaying log output"
+        echo "Container ${mariadb_container_name} could not be started, displaying log output:"
         docker logs ${mariadb_container_name}
         exit 1
 fi
