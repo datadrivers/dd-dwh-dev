@@ -8,7 +8,7 @@ ENV PDI_RELEASE=7.1 \
     PENTAHO_JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64 \
     USER_HOME=/home/pentaho
 
-	
+
 RUN mkdir $USER_HOME \
         $USER_HOME/.kettle \
         $USER_HOME/repository \
