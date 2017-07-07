@@ -20,13 +20,9 @@
 
 
 #  Number of expected arguments
-EXPECTED_ARGS=12
+EXPECTED_ARGS=8
 
 #  Expected arguments, as displayed within usage
-s3Bucket=
-s3Path=
-s3Object=
-LocalPath=
 mariadb_container_name=
 mariadb_container_confd_volume=
 mariadb_container_confd_file=
@@ -42,15 +38,11 @@ function usage {
 #  Function to display usage
     echo
     echo "Usage ${0##*/}:"
-    echo "      [--s3Bucket] [--s3Path] [--s3Object] [--LocalPath]"
     echo "      [--mariadb_container_confd_volume]"
     echo "      [--mariadb_container_confd_file] [--mariadb_release] [--mariadb_root_password]"
     echo "      [--mariadb_cpu_shares] [--mariadb_memory_limit]"
     echo
-    echo "--s3Bucket                        Name of the AWS S3 Bucket, the aws-cli will pull the MariaDB volume backup from."
-    echo "--s3Path                          Path to the MariaDB volume backup"
-    echo "--s3Object                        Name of the MariaDB volume backup"
-    echo "--LocalPath                       Host path, where the MariaDB volume backup will be temporarily stored"    
+ 
     echo "--mariadb_container_name          This is the name your MariaDB container will be listed with using docker ps"
     echo "--mariadb_container_confd_volume  If /my/custom/config-file.cnf is the path and name of your custom configuration file,"
     echo "                                  you would set it to /my/custom. This will make the created MariaDB instance"
@@ -66,34 +58,29 @@ function usage {
     echo
 }
 
-function loggError {
-#  Function to display a custom error message, call usage and exit with error
+#  Declare function to unify ERROR log outputs
+function logError {
     echo
     echo "${0##*/} - ERROR: $1"
     usage
     exit 1
 }
 
-function loggDebug {
-#  Function to display a custom logg message for traceability
+#  Declare function to unify DEBUG log outputs
+function logDebug {
     echo "${0##*/} - DEBUG: $1"
 }
 
+#  Check if the correct number of arguments has been given
 if [ $# -ne $EXPECTED_ARGS ]
-#  Check if the number of given arguments equals $EXPECTED_ARGS and else run loggError and exit
-    then 
-        loggError "Invalid number of arguments provided!"
+then 
+    logError "Invalid number of arguments provided!"
 fi
 
 
+#  Parse command line arguments
 while [ $# -gt 0 ]; do
-#  Parse command line arguments and exit on unknown argument, displaying usage
     case "$1" in
-        
-        --s3Bucket=*) s3Bucket=${1#*=} ;;
-        --s3Path=*) s3Path=${1#*=} ;;
-        --s3Object=*) s3Object=${1#*=} ;;
-        --LocalPath=*) LocalPath=${1#*=} ;;
         --mariadb_container_name=*) mariadb_container_name=${1#*=} ;;
         --mariadb_container_confd_volume=*) mariadb_container_confd_volume=${1#*=} ;;
         --mariadb_container_confd_file=*) mariadb_container_confd_file=${1#*=} ;;
@@ -103,108 +90,100 @@ while [ $# -gt 0 ]; do
         --mariadb_memory_limit=*) mariadb_memory_limit=${1#*=} ;;
         --mariadb_access_port=*) mariadb_access_port=${1#*=} ;;
         *)
-        loggError "Unkown Argument ${1/=*/}" 
+        logError "Unkown Argument ${1/=*/}" 
     esac
     shift
 done
-loggDebug "All parameters successfully parsed"
+logDebug "All parameters successfully parsed"
 
 
 
-#  Control wether ${mariadb_container_name} already exists (either running or created) and exit if true
-docker_container_status=$(docker inspect -f {{.State.Status}} ${mariadb_container_name})
-if [ "${docker_container_status}" == "running" ] || [ "${docker_container_running}" == "created" ]
-    then
-        loggError "container ${mariadb_container_name} already exists. Please make sure to specify unique container names"
+
+################################################################
+#
+#    Check if container already exist and exit if true
+#
+################################################################
+
+#  Check if the MariaDB data container is running
+if [ "$(docker ps -aq -f status=running -f name=${mariadb_container_name})" ]
+then
+    logError "container ${mariadb_container_name} has already been created. Please make sure to specify unique container names"
+fi
+
+#  Check if the MariaDB database container has been created
+if [ "$(docker ps -aq -f status=created -f name=${mariadb_container_name}_data)" ]
+then
+    logError "container ${mariadb_container_name}_data already exists. Please make sure to specify unique container names"
 fi
 
 
 
-#  Control wether ${mariadb_container_name} already exists (either running or created) and exit if true
-docker_container_status=$(docker inspect -f {{.State.Status}} ${mariadb_container_name})_name
-if [ "${docker_container_status}" == "running" ] || [ "${docker_container_running}" == "created" ]
-    then
-        loggError "container ${mariadb_container_name}_data already exists. Please make sure to specify unique container names"
-fi
 
+################################################################
+#
+#    Initialize directories and files
+#
+################################################################
 
-
-#  Initialize the directory, where the MariaDB volume backup will be temporarily stored and pull the 
-#+ object from the specified bucket and path
-loggDebug "Creating directory ${LocalPath}"
-
-if [ -d ${LocalPath} ]
-    then
-        loggDebug "Path ${LocalPath} already exists. Removing old backup file"
-        rm ${LocalPath}/${s3Object}
-        loggDebug "File ${LocalPath}/${s3Object} successfully removed"
-    else
-        mkdir -p ${LocalPath}
-        loggDebug "${LocalPath} successfully created"
-fi
-loggDebug "Copying s3://${s3Bucket}/${s3Path}/${s3Object} to ${LocalPath}"
-aws s3 cp s3://${s3Bucket}/${s3Path}/${s3Object} ${LocalPath}
-
-
-
-#  loggDebug "Unpacking ${LocalPath}/${s3Object} to ${DB_MYSQL_DATA_DIR}/.."
-#  tar -xf ${LocalPath}/${s3Object} -C ${DB_MYSQL_DATA_DIR}/..
-
-
-
-
-#  Initialize the directory where your my-config-file.cnf file be stored in. This directory will be
-#+ mounted into the containers /etc/mysql/conf.d directory. This will make the created MariaDB instance
-#+ use the combined startup settings from /etc/mysql/my.cnf and /etc/mysql/conf.d/config-file.cnf, 
-#+ with settings from the latter taking precedence
-loggDebug "Creating directory ${mariadb_container_confd_volume}"
+logDebug "Creating directory ${mariadb_container_confd_volume}"
 if [ -d ${mariadb_container_confd_volume} ]
-# Check wether ${mariadb_container_confd_volume} is a directory and create it if not existing
-    then
-        loggDebug "Path ${mariadb_container_confd_volume} already exists"
-    else
-        mkdir -p ${mariadb_container_confd_volume}
-        loggDebug "${mariadb_container_confd_volume} successfully created"
+then
+    logDebug "Path ${mariadb_container_confd_volume} already exists"
+else
+    mkdir -p ${mariadb_container_confd_volume}
+    logDebug "${mariadb_container_confd_volume} successfully created"
 fi
 
 if [ ! -e ${mariadb_container_confd_file} ]
-#  Check wether ${mariadb_container_confd_file} exists and raise error if false
-    then
-        loggError "File ${mariadb_container_confd_file} does not exist or is not a file"
+then
+    logError "File ${mariadb_container_confd_file} does not exist or is not a file"
 fi
 
 if [ -s ${mariadb_container_confd_file} ]
-#  heck wether ${mariadb_container_confd_file} is not zero size and exit if false, else proceed and
-#+ copy ${mariadb_container_confd_file} into ${mariadb_container_confd_volume}
-    then
-        loggDebug "Copying ${mariadb_container_confd_file} to ${mariadb_container_confd_volume}"
-        cp ${mariadb_container_confd_file} ${mariadb_container_confd_volume}
-    else
-        loggError "File ${mariadb_container_confd_file} is zero size"
+then
+    logDebug "Copying ${mariadb_container_confd_file} to ${mariadb_container_confd_volume}"
+    cp ${mariadb_container_confd_file} ${mariadb_container_confd_volume}
+else
+    logError "File ${mariadb_container_confd_file} is zero size"
 fi
 
 
 
 
-#  Create volume container
-docker create -v /${mariadb_container_name} --name ${mariadb_container_name}_data alpine:latest /bin/true
+################################################################
+#
+#    Create the MariaDB data container
+#
+################################################################
 
-#  Check if ${mariadb_container_name}_data is running and else display the containers log output
-docker_container_status=$(docker inspect -f {{.State.Status}} ${mariadb_container_name}_data)
-if [ "${docker_container_status}" == "created" ]
-    then
-        loggDebug "Container  ${mariadb_container_name}_data has successfully been created"
-    else
-        echo "Container ${mariadb_container_name}_data could not be created, displaying log output:"
-        docker logs ${mariadb_container_name}
-        exit 1
+#  Create the MariaDB data container
+#docker create -v /${mariadb_container_name} --name ${mariadb_container_name}_data alpine:latest /bin/true
+
+#  Check if the MariaDB data container has been successfully created
+if [ "$(docker inspect -f {{.State.Status}} ${mariadb_container_name}_data)" == "created" ]
+then
+    logDebug "Container  ${mariadb_container_name}_data has successfully been created"
+else
+    echo "Container ${mariadb_container_name}_data could not be created, displaying log output:"
+    docker logs ${mariadb_container_name}
+    exit 1
 fi
 
 
 
 
-#  Create MariaDB container
-docker run -d -c ${mariadb_cpu_shares} -m ${mariadb_memory_limit} \
+################################################################
+#
+#    Create the MariaDB database container
+#
+################################################################
+
+#  Create the MariaDB database container
+#docker run \
+    -d \
+    -c ${mariadb_cpu_shares} \
+    -m ${mariadb_memory_limit} \
     --name=${mariadb_container_name} \
     --publish ${mariadb_access_port}:3306 \
     --volumes-from ${mariadb_container_name}_data \
@@ -212,21 +191,20 @@ docker run -d -c ${mariadb_cpu_shares} -m ${mariadb_memory_limit} \
     -e MYSQL_ROOT_PASSWORD=${mariadb_root_password} \
     mariadb:${mariadb_release}
 
-#  Wait 5 seconds before checking wether the container is running
+#  Delay the following container status check in case the database is not instantly up and running
 sleep 5
 
-#  Check if container is running and else display the containers log output
-docker_container_status=$(docker inspect -f {{.State.Running}} ${mariadb_container_name})
-if [ "${docker_container_status}" == "true" ]
-    then
-        loggDebug "Container  ${mariadb_container_name} is up and running"
-    else
-        echo "Container ${mariadb_container_name} could not be started, displaying log output:"
-        docker logs ${mariadb_container_name}
-        exit 1
+#  Check if the MariaDB database container has been successfully started
+if [ "$(docker inspect -f {{.State.Running}} ${mariadb_container_name})" == "true" ]
+then
+    logDebug "Container  ${mariadb_container_name} is up and running"
+else
+    echo "Container ${mariadb_container_name} could not be started. It's current status is $(docker inspect -f {{.State.Status}} ${mariadb_container_name})" 
+    docker logs ${mariadb_container_name}
+    exit 1
 fi
 
 
-loggDebug "Execution Succeeded"
+logDebug "Execution Succeeded"
 
 exit 0
